@@ -123,9 +123,31 @@ private fun MenuTile(emoji: String, title: String, color: Color, modifier: Modif
     }
 }
 
+/** Voce di sistema disponibile per l'italiano. */
+data class VoiceInfo(val name: String, val label: String, val offline: Boolean)
+
+/** Età della voce: si ottiene variando tono e velocità della voce scelta. */
+private data class VoiceAge(val title: String, val pitch: Float, val rate: Float)
+
+private val voiceAges = listOf(
+    VoiceAge("👧 Bambino/a", 1.55f, 1.05f),
+    VoiceAge("🧒 Ragazzo/a", 1.25f, 1.0f),
+    VoiceAge("🧑 Adulto/a", 1.0f, 0.95f),
+    VoiceAge("🧓 Anziano/a", 0.82f, 0.85f),
+)
+
 @Composable
-fun SettingsScreen(store: SettingsStore, onTestVoice: () -> Unit, onBack: () -> Unit) {
+fun SettingsScreen(
+    store: SettingsStore,
+    voices: () -> List<VoiceInfo>,
+    onPreview: (voiceName: String, pitch: Float, rate: Float) -> Unit,
+    onInstallVoices: () -> Unit,
+    onTestVoice: () -> Unit,
+    onBack: () -> Unit,
+) {
     val p = store.p
+    var refresh by remember { mutableStateOf(0) }
+    val list = remember(refresh) { voices() }
     Column(Modifier.fillMaxSize().background(Color.White)) {
         TopBar("Impostazioni", onBack) { OutlinedButton(onClick = onTestVoice) { Text("🔊 Prova voce") } }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -137,14 +159,60 @@ fun SettingsScreen(store: SettingsStore, onTestVoice: () -> Unit, onBack: () -> 
             SwitchRow("Mostra la parola sotto l'immagine", p.showLabels) { store.update(p.copy(showLabels = it)) }
             SwitchRow("Testo in MAIUSCOLO (stampato maiuscolo)", p.uppercase) { store.update(p.copy(uppercase = it)) }
             SwitchRow("Mostra la riga delle parole base", p.showCore) { store.update(p.copy(showCore = it)) }
+            SwitchRow("Carattere ad alta leggibilità in tutta l'app (Atkinson Hyperlegible)", p.legibleFont) { store.update(p.copy(legibleFont = it)) }
+
+            SectionLabel("Tastiera")
+            SwitchRow("Lettere in ordine alfabetico (ABC) invece di QWERTY", p.keyboardAbc) { store.update(p.copy(keyboardAbc = it)) }
+            SwitchRow("Tasti e testo in STAMPATO MAIUSCOLO", p.keyboardUpper) { store.update(p.copy(keyboardUpper = it)) }
 
             SectionLabel("Comunicazione")
             SwitchRow("Componi frasi (le tessere si accodano nella barra in alto)", p.sentenceMode) { store.update(p.copy(sentenceMode = it)) }
             SwitchRow("Pronuncia la tessera al tocco", p.speakOnTap) { store.update(p.copy(speakOnTap = it)) }
+
+            SectionLabel("Voce")
+            Text(
+                "Scegli una voce (maschile o femminile: ascoltale con ▶) e poi l'età. " +
+                        "L'età cambia tono e velocità della voce scelta: per esempio voce femminile + Bambino/a = voce di bambina.",
+                color = Muted, fontSize = 13.sp
+            )
+            Text("Età della voce", color = Ink, fontWeight = FontWeight.Bold)
+            ChoiceRow(voiceAges, voiceAges.minByOrNull { kotlin.math.abs(it.pitch - p.ttsPitch) } ?: voiceAges[2], { it.title }) { a ->
+                store.update(p.copy(ttsPitch = a.pitch, ttsRate = a.rate))
+                onPreview(p.voiceName, a.pitch, a.rate)
+            }
+            Text("Voci disponibili (${list.size})", color = Ink, fontWeight = FontWeight.Bold)
+            if (list.isEmpty()) Text("Sintesi vocale non pronta o nessuna voce italiana installata.", color = Muted)
+            val all = listOf(VoiceInfo("", "Predefinita del telefono", true)) + list
+            all.forEach { v ->
+                val selected = p.voiceName == v.name
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                        .background(if (selected) Color(0xFFBBDEFB) else Panel).padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text((if (selected) "✓ " else "") + v.label, color = Ink, fontWeight = FontWeight.Bold)
+                        if (v.name.isNotEmpty()) Text(v.name + if (v.offline) "  · offline" else "  · serve internet", color = Muted, fontSize = 11.sp)
+                    }
+                    OutlinedButton(onClick = { onPreview(v.name, p.ttsPitch, p.ttsRate) }) { Text("▶") }
+                    if (!selected) Button(onClick = { store.update(p.copy(voiceName = v.name)) }) { Text("Usa") }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onInstallVoices) { Text("➕ Installa altre voci") }
+                TextButton(onClick = { refresh++ }) { Text("↻ Aggiorna elenco") }
+            }
+            Text(
+                "Per avere più voci: Impostazioni del telefono → Sintesi vocale → Servizi vocali Google → " +
+                        "Installa dati vocali → Italiano, poi scarica le voci disponibili.",
+                color = Muted, fontSize = 12.sp
+            )
+            Text("Regolazione fine", color = Ink, fontWeight = FontWeight.Bold)
             Text("Velocità voce: %.2f".format(p.ttsRate), color = Ink)
             Slider(p.ttsRate, { store.update(p.copy(ttsRate = it)) }, valueRange = 0.5f..1.5f)
             Text("Tono voce: %.2f".format(p.ttsPitch), color = Ink)
-            Slider(p.ttsPitch, { store.update(p.copy(ttsPitch = it)) }, valueRange = 0.5f..1.6f)
+            Slider(p.ttsPitch, { store.update(p.copy(ttsPitch = it)) }, valueRange = 0.5f..1.8f)
 
             SectionLabel("Accessibilità e protezione")
             Text(
@@ -168,6 +236,8 @@ fun InfoScreen(onBack: () -> Unit) {
                         "barra di composizione della frase, vocabolario nucleare (parole base), colori della chiave di Fitzgerald, " +
                         "sintesi vocale e voci registrate, raccolta dati d'uso per sessione.", color = Ink
             )
+            SectionLabel("Carattere")
+            Text("Atkinson Hyperlegible © 2020 Braille Institute of America, licenza SIL Open Font License 1.1.", color = Ink)
             SectionLabel("Pittogrammi")
             Text(Arasaac.CREDITS, color = Ink)
             Text(

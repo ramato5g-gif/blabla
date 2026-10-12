@@ -16,6 +16,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -31,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,6 +44,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.lifecycle.lifecycleScope
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import java.util.Locale
 
 private enum class Screen { COMMUNICATOR, MENU, EDITOR, STATS, SETTINGS, INFO, STORIES, STORY_READ, STORY_EDIT }
@@ -62,6 +73,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     // Lettura parola per parola (storie)
     private var seqCallback: ((Int) -> Unit)? = null
     private var lastSeqId = ""
+    // Sintesi vocale su file (video delle storie)
+    private val synthWaiters = java.util.concurrent.ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
+    private val videoProgress = mutableStateOf<String?>(null)
 
     private val pinned = mutableStateOf(false)
     /** Destinazione dell'immagine richiesta (galleria/fotocamera). */
@@ -80,7 +94,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         voices = VoiceStore(this)
         stories = StoryStore(dir, board)
         setContent {
-            MaterialTheme(colorScheme = lightColorScheme(primary = Accent)) { App() }
+            MaterialTheme(
+                colorScheme = lightColorScheme(primary = Accent),
+                typography = if (settings.p.legibleFont) legibleTypography() else Typography()
+            ) { App() }
         }
     }
 
@@ -183,6 +200,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     Screen.STORY_EDIT -> StoryEditorScreen(
                         store = stories, board = board, p = settings.p, requestImage = requestImage,
                         onPreview = { st -> reading = st; readingFrom = Screen.STORY_EDIT; screen = Screen.STORY_READ },
+                        onExportVideo = { st -> makeVideo(st) },
                         onExportPdf = { st ->
                             toast("Creo il PDF…")
                             runCatching { StoryPdf.create(this@MainActivity, st, board, settings.p.uppercase) }
@@ -226,6 +244,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
                     Screen.SETTINGS -> SettingsScreen(
                         store = settings,
+                        voices = ::italianVoices,
+                        onPreview = { name, pitch, rate -> previewVoice(name, pitch, rate) },
+                        onInstallVoices = { openTtsSettings() },
                         onTestVoice = { say(null, "Ciao, questa è la mia voce") },
                         onBack = { screen = Screen.MENU }
                     )
@@ -246,6 +267,21 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     onStart = { n, note -> log.startSession(n, note); showStartSession = false; screen = Screen.COMMUNICATOR },
                     onDismiss = { showStartSession = false }
                 )
+
+                videoProgress.value?.let { msg ->
+                    AlertDialog(
+                        onDismissRequest = {},
+                        title = { Text("🎬 Video della storia") },
+                        text = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                CircularProgressIndicator()
+                                Text(msg)
+                                Text("Può richiedere qualche minuto. Non chiudere l'app.", color = Muted)
+                            }
+                        },
+                        confirmButton = {}
+                    )
+                }
 
                 if (showBackup) AlertDialog(
                     onDismissRequest = { showBackup = false },
@@ -281,6 +317,52 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         imageCallback = null
     }
 
+    /** Voci italiane installate (prima quelle offline). */
+    private fun italianVoices(): List<VoiceInfo> {
+        if (!ttsReady) return emptyList()
+        val list = runCatching { tts.voices?.toList() ?: emptyList() }.getOrDefault(emptyList())
+            .filter { it.locale.language == "it" && !it.features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) }
+            .sortedWith(compareBy({ it.isNetworkConnectionRequired }, { it.name }))
+        return list.mapIndexed { i, v ->
+            VoiceInfo(v.name, "Voce ${i + 1}" + if (v.quality >= Voice.QUALITY_HIGH) " · alta qualità" else "", !v.isNetworkConnectionRequired)
+        }
+    }
+
+    /** Imposta sul motore la voce scelta (se esiste ancora). */
+    private fun applyVoice(name: String) {
+        if (!ttsReady) return
+        if (name.isEmpty()) {
+            runCatching { tts.defaultVoice?.let { if (tts.voice?.name != it.name) tts.voice = it } }
+            runCatching { tts.setLanguage(Locale.ITALIAN) }
+            return
+        }
+        if (tts.voice?.name == name) return
+        runCatching { tts.voices?.firstOrNull { it.name == name }?.let { tts.voice = it } }
+    }
+
+    private fun previewVoice(name: String, pitch: Float, rate: Float) {
+        if (!ttsReady) { toast("Sintesi vocale non pronta"); return }
+        voices.stopPlayback()
+        applyVoice(name)
+        tts.setPitch(pitch)
+        tts.setSpeechRate(rate)
+        tts.speak("Ciao! Questa è la mia voce. Vuoi giocare con me?", TextToSpeech.QUEUE_FLUSH, null, "prova-${System.nanoTime()}")
+        // al prossimo uso si torna alla voce salvata
+        window.decorView.postDelayed({ applyVoice(settings.p.voiceName) }, 4000)
+    }
+
+    private fun openTtsSettings() {
+        val intents = listOf(
+            Intent("com.android.settings.TTS_SETTINGS"),
+            Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA),
+            Intent(android.provider.Settings.ACTION_SETTINGS),
+        )
+        for (i in intents) {
+            try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return } catch (_: Exception) { }
+        }
+        toast("Apri Impostazioni → Sintesi vocale")
+    }
+
     /** Voce registrata della tessera se presente, altrimenti sintesi vocale. */
     private fun say(card: Card?, text: String) {
         if (card != null && voices.has(card.id)) {
@@ -289,6 +371,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
         voices.stopPlayback()
         if (ttsReady) {
+            applyVoice(settings.p.voiceName)
             tts.setSpeechRate(settings.p.ttsRate)
             tts.setPitch(settings.p.ttsPitch)
             tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "caa-${System.nanoTime()}")
@@ -300,6 +383,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         voices.stopPlayback()
         if (!ttsReady || words.isEmpty()) return
         seqCallback = onIndex
+        applyVoice(settings.p.voiceName)
         tts.setSpeechRate(settings.p.ttsRate * 0.85f)
         tts.setPitch(settings.p.ttsPitch)
         lastSeqId = "seq_${words.size - 1}"
@@ -313,6 +397,38 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         seqCallback = null
         if (ttsReady) tts.stop()
         voices.stopPlayback()
+    }
+
+    /** Sintetizza un testo in un file WAV e attende la fine. */
+    private suspend fun synthToFile(text: String, file: File): Boolean {
+        if (!ttsReady) return false
+        val id = "syn_${System.nanoTime()}"
+        val waiter = CompletableDeferred<Boolean>()
+        synthWaiters[id] = waiter
+        applyVoice(settings.p.voiceName)
+        tts.setSpeechRate(settings.p.ttsRate)
+        tts.setPitch(settings.p.ttsPitch)
+        if (tts.synthesizeToFile(text, null, file, id) != TextToSpeech.SUCCESS) { synthWaiters.remove(id); return false }
+        return withTimeoutOrNull(30_000) { waiter.await() } ?: false
+    }
+
+    /** Crea il video della storia in background, poi lo salva in Download e lo condivide. */
+    private fun makeVideo(story: Story) {
+        if (videoProgress.value != null) return
+        if (!ttsReady) toast("Sintesi vocale non pronta: il video sarà senza voce")
+        videoProgress.value = "Preparo il video…"
+        lifecycleScope.launch {
+            val result = runCatching {
+                StoryVideo.create(this@MainActivity, story, board, settings.p.uppercase, ::synthToFile) { msg ->
+                    runOnUiThread { if (videoProgress.value != null) videoProgress.value = msg }
+                }
+            }
+            videoProgress.value = null
+            result.onSuccess { f ->
+                if (saveToDownloads(f, "video/mp4")) toast("Video salvato nella cartella Download: ${f.name}")
+                shareFile(f, "video/mp4", "Video della storia")
+            }.onFailure { toast("Video non riuscito: ${it.message}") }
+        }
     }
 
     private fun isPinned(): Boolean =
@@ -406,11 +522,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 }
 
                 override fun onDone(utteranceId: String?) {
+                    if (utteranceId != null && utteranceId.startsWith("syn_")) { synthWaiters.remove(utteranceId)?.complete(true); return }
                     if (utteranceId == lastSeqId) runOnUiThread { seqCallback?.invoke(-1) }
                 }
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
+                    if (utteranceId != null && utteranceId.startsWith("syn_")) { synthWaiters.remove(utteranceId)?.complete(false); return }
                     runOnUiThread { seqCallback?.invoke(-1) }
                 }
             })

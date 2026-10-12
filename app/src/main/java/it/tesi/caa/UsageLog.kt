@@ -17,6 +17,7 @@ object Ev {
     const val SENTENCE = "FRASE"   // frase composta e pronunciata
     const val CLEAR = "CANCELLA"   // frase cancellata
     const val STORY = "STORIA"     // storia aperta
+    const val TYPED = "SCRITTURA"  // parola scritta con la tastiera
 }
 
 data class LogEvent(
@@ -131,6 +132,7 @@ class UsageLog(dir: File) {
 
 data class Stats(
     val cardTaps: Int,
+    val typedWords: Int,
     val distinctCards: Int,
     val sentences: Int,
     val mlu: Float,
@@ -146,6 +148,7 @@ fun computeStats(ev: List<LogEvent>): Stats {
     val sent = ev.filter { it.type == Ev.SENTENCE }
     return Stats(
         cardTaps = taps.size,
+        typedWords = ev.count { it.type == Ev.TYPED },
         distinctCards = taps.map { it.cardId }.distinct().size,
         sentences = sent.size,
         mlu = if (sent.isEmpty()) 0f else sent.map { it.n }.average().toFloat(),

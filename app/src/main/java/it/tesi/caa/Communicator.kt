@@ -60,6 +60,8 @@ fun CommunicatorScreen(
     val strip = remember { mutableStateListOf<Card>() }
     var topicId by rememberSaveable { mutableStateOf(board.topics.firstOrNull()?.id ?: CORE_TOPIC) }
     var lastTap by remember { mutableLongStateOf(0L) }
+    var keyboardOpen by rememberSaveable { mutableStateOf(false) }
+    val typedHistory = remember { log.events().filter { it.type == Ev.TYPED }.map { it.text }.toMutableList() }
     if (board.topics.none { it.id == topicId } && topicId != CORE_TOPIC) topicId = board.topics.firstOrNull()?.id ?: CORE_TOPIC
 
     fun tap(c: Card) {
@@ -73,6 +75,15 @@ fun CommunicatorScreen(
         } else {
             say(c, c.spoken)
         }
+    }
+
+    /** Parola dalla tastiera: tessera esistente (con il suo pittogramma) o parola scritta. */
+    fun addTyped(word: String, card: Card?) {
+        val c = card ?: Card("w_${word}_${System.currentTimeMillis()}", "", word, "", "", null, WordClass.ALTRO)
+        typedHistory += word
+        log.log(Ev.TYPED, card, "Tastiera", word, 1)
+        strip += c
+        if (p.speakOnTap) say(card, c.label)
     }
 
     fun speakStrip() {
@@ -111,6 +122,7 @@ fun CommunicatorScreen(
                             if (strip.isNotEmpty()) { log.log(Ev.CLEAR, null, "", "", strip.size); strip.clear() }
                         }
                     }
+                    ActionButton("⌨", if (keyboardOpen) Color(0xFF90CAF9) else Color.White, Modifier.weight(1f).fillMaxHeight()) { keyboardOpen = !keyboardOpen }
                     ActionButton("📖", Color(0xFFFFE0B2), Modifier.weight(1f).fillMaxHeight()) { onOpenStories() }
                     MenuButton(p.childLock, log.current != null, Modifier.weight(1f).fillMaxHeight(), onOpenMenu)
                 }
@@ -131,10 +143,23 @@ fun CommunicatorScreen(
                 } else {
                     Text("Tocca una tessera per parlare", color = Muted, fontSize = 18.sp, modifier = Modifier.weight(1f).padding(start = 8.dp))
                 }
+                ActionButton("⌨", if (keyboardOpen) Color(0xFF90CAF9) else Color.White, Modifier.size(84.dp, 96.dp)) { keyboardOpen = !keyboardOpen }
                 ActionButton("📖", Color(0xFFFFE0B2), Modifier.size(84.dp, 96.dp)) { onOpenStories() }
                 MenuButton(p.childLock, log.current != null, Modifier.size(64.dp, 96.dp), onOpenMenu)
             }
         }
+
+        if (keyboardOpen) {
+            KeyboardPanel(
+                p = p,
+                vocabulary = board.cards,
+                history = typedHistory,
+                onWord = { w, c -> addTyped(w, c) },
+                onSpeak = { say(null, it) },
+                onClose = { keyboardOpen = false },
+                modifier = Modifier.weight(1f).fillMaxWidth()
+            )
+        } else {
 
         // ---------- Parole base ----------
         val core = board.cardsOf(CORE_TOPIC)
@@ -187,6 +212,7 @@ fun CommunicatorScreen(
                     grid(Modifier.weight(1f).fillMaxWidth())
                 }
             }
+        }
         }
     }
 }

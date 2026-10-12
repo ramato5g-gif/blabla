@@ -339,6 +339,7 @@ fun StoryEditorScreen(
     requestImage: (ImageSource, (String) -> Unit) -> Unit,
     onPreview: (Story) -> Unit,
     onExportPdf: (Story) -> Unit,
+    onExportVideo: (Story) -> Unit,
     onBack: () -> Unit,
 ) {
     var selectedId by remember { mutableStateOf(store.stories.firstOrNull()?.id) }
@@ -356,6 +357,7 @@ fun StoryEditorScreen(
             if (compact) OutlinedButton(onClick = newStory) { Text("+ Nuova storia") }
             if (story != null) OutlinedButton(onClick = { onPreview(story) }) { Text("▶ Prova lettura") }
             if (story != null) Button(onClick = { onExportPdf(story) }) { Text("📄 Scarica PDF") }
+            if (story != null) Button(onClick = { onExportVideo(story) }) { Text("🎬 Crea video") }
         }
         if (compact) {
             LazyRow(Modifier.fillMaxWidth().background(Panel).padding(2.dp)) {

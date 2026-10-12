@@ -96,6 +96,7 @@ fun StatsScreen(
                 StatBox("Frasi pronunciate", "${st.sentences}", w)
                 StatBox("Lunghezza media frase", String.format(Locale.ITALY, "%.1f", st.mlu), w)
                 StatBox("Frase più lunga", "${st.maxLen}", w)
+                StatBox("Parole scritte", "${st.typedWords}", w)
             }
             Text(
                 "Lunghezza media frase = numero medio di tessere per frase pronunciata (indice di complessità, analogo all'LME in tessere).",

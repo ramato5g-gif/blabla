@@ -67,6 +67,11 @@ data class Prefs(
     val ttsPitch: Float = 1.0f,
     val childLock: Boolean = false,
     val debounceMs: Int = 0,
+    val legibleFont: Boolean = true,
+    val keyboardAbc: Boolean = true,
+    val keyboardUpper: Boolean = true,
+    /** Nome della voce di sistema scelta ("" = predefinita). */
+    val voiceName: String = "",
 )
 
 class SettingsStore(dir: File) {
@@ -89,6 +94,10 @@ class SettingsStore(dir: File) {
             ttsPitch = o.optDouble("pitch", d.ttsPitch.toDouble()).toFloat(),
             childLock = o.optBoolean("lock", d.childLock),
             debounceMs = o.optInt("debounce", d.debounceMs),
+            legibleFont = o.optBoolean("legible", d.legibleFont),
+            keyboardAbc = o.optBoolean("kbAbc", d.keyboardAbc),
+            keyboardUpper = o.optBoolean("kbUpper", d.keyboardUpper),
+            voiceName = o.optString("voice", d.voiceName),
         )
     }.getOrDefault(Prefs())
 
@@ -99,6 +108,7 @@ class SettingsStore(dir: File) {
             .put("sentence", n.sentenceMode).put("speakTap", n.speakOnTap).put("core", n.showCore)
             .put("rate", n.ttsRate.toDouble()).put("pitch", n.ttsPitch.toDouble())
             .put("lock", n.childLock).put("debounce", n.debounceMs)
+            .put("legible", n.legibleFont).put("kbAbc", n.keyboardAbc).put("kbUpper", n.keyboardUpper).put("voice", n.voiceName)
         file.writeText(o.toString())
     }
 }

@@ -13,6 +13,11 @@ l'uso logopedico e la raccolta dati di una tesi di laurea.
 - **Comunicatore**: barra della frase (tocca 🔊 o la barra per leggerla), ⌫ cancella l'ultima, ✖ svuota;
   riga delle **parole base** (vocabolario nucleare) sempre visibile; argomenti a sinistra (orizzontale)
   o in alto (verticale); griglia di tessere.
+- **⌨ Tastiera CAA**: tasti grandi in stampato maiuscolo, ordine ABC o QWERTY, carattere ad alta
+  leggibilità **Atkinson Hyperlegible**; suggerimenti di completamento con il pittogramma della tessera;
+  le parole scritte si aggiungono alla frase.
+- **🎬 Video delle storie**: MP4 1280×720 con voce narrante e simboli che si illuminano durante la lettura,
+  creato sul dispositivo e salvato in Download.
 - **Tessere e argomenti** (Area terapista → ✏️): crea, modifica, riordina, elimina.
   Immagine da **pittogrammi ARASAAC** (ricerca in italiano), galleria, fotocamera o emoji.
   Categoria grammaticale con i colori della **chiave di Fitzgerald**. Frase facoltativa e **voce registrata**.
@@ -30,6 +35,10 @@ Carica il contenuto di questa cartella in un repository GitHub e crea il file
 ## Crediti
 Pittogrammi: autore Sergio Palao, origine ARASAAC (https://arasaac.org), licenza CC BY-NC-SA,
 proprietà del Governo di Aragona (Spagna).
+
+## Carattere
+Atkinson Hyperlegible © 2020 Braille Institute of America, Inc., licenza SIL Open Font License 1.1
+(testo della licenza in `app/src/main/assets/licenze`).
 
 ## Privacy
 Tutti i dati restano sul dispositivo. Nei profili usa iniziali o codici.

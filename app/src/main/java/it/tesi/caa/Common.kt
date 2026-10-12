@@ -72,20 +72,29 @@ fun CardTile(
         val labelSp = (base * 0.14f).coerceIn(10f, 30f)
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             val imgSize = base * if (showLabel) 0.68f else 0.85f
-            if (img != null) {
-                Image(
-                    img, contentDescription = card.label, contentScale = ContentScale.Fit,
-                    modifier = Modifier.size(imgSize.dp).clip(RoundedCornerShape(8.dp)).background(Color.White)
-                )
-            } else {
-                Text(card.emoji.ifBlank { "▫" }, fontSize = (imgSize * 0.72f).sp, textAlign = TextAlign.Center)
-            }
-            if (showLabel) {
+            if (img == null && card.emoji.isBlank()) {
+                // Parola scritta con la tastiera: solo testo, grande
                 Text(
                     if (uppercase) card.label.uppercase() else card.label,
-                    fontSize = labelSp.sp, fontWeight = FontWeight.Bold, color = Ink,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center
+                    fontSize = (base * 0.24f).coerceIn(14f, 40f).sp, fontWeight = FontWeight.Bold, color = Ink,
+                    fontFamily = Legible, textAlign = TextAlign.Center, maxLines = 2
                 )
+            } else {
+                if (img != null) {
+                    Image(
+                        img, contentDescription = card.label, contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(imgSize.dp).clip(RoundedCornerShape(8.dp)).background(Color.White)
+                    )
+                } else {
+                    Text(card.emoji, fontSize = (imgSize * 0.72f).sp, textAlign = TextAlign.Center)
+                }
+                if (showLabel) {
+                    Text(
+                        if (uppercase) card.label.uppercase() else card.label,
+                        fontSize = labelSp.sp, fontWeight = FontWeight.Bold, color = Ink,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }
