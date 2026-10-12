@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -83,46 +87,30 @@ fun EditorScreen(
             OutlinedButton(onClick = { mergeResult = board.mergeRepertoire() }) { Text("📥 Repertorio completo") }
             Button(onClick = { askBatch = true }) { Text("🔎 Pittogrammi automatici") }
         }
-        Row(Modifier.fillMaxSize()) {
-            // ---------- Argomenti ----------
-            Column(Modifier.width(250.dp).fillMaxHeight().background(Panel).padding(6.dp)) {
-                Button(onClick = {
-                    editTopic = Topic(newId("t"), "", "📁"); editTopicIsNew = true
-                }, modifier = Modifier.fillMaxWidth()) { Text("+ Nuovo argomento") }
-                LazyColumn(Modifier.fillMaxSize()) {
-                    item(key = "__core") {
-                        TopicTile("⭐", null, "Parole base", topicId == CORE_TOPIC, false, Modifier.fillMaxWidth()) { topicId = CORE_TOPIC }
-                    }
-                    items(board.topics, key = { it.id }) { t ->
-                        Column {
-                            TopicTile(t.emoji, t.imagePath, t.name, t.id == topicId, false, Modifier.fillMaxWidth()) { topicId = t.id }
-                            if (t.id == topicId) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    SmallBtn("✏") { editTopic = t; editTopicIsNew = false }
-                                    SmallBtn("▲") { board.moveTopic(t.id, -1) }
-                                    SmallBtn("▼") { board.moveTopic(t.id, 1) }
-                                    SmallBtn("🗑") { confirmDeleteTopic = t }
-                                }
-                            }
-                        }
-                    }
-                }
+        val compact = isCompact()
+        val newTopic = { editTopic = Topic(newId("t"), "", "📁"); editTopicIsNew = true }
+        val topicActions: @Composable () -> Unit = {
+            val t = board.topics.firstOrNull { it.id == topicId }
+            if (t != null) {
+                SmallBtn("✏") { editTopic = t; editTopicIsNew = false }
+                SmallBtn("▲") { board.moveTopic(t.id, -1) }
+                SmallBtn("▼") { board.moveTopic(t.id, 1) }
+                SmallBtn("🗑") { confirmDeleteTopic = t }
             }
-            // ---------- Tessere ----------
-            Column(Modifier.weight(1f).fillMaxHeight().padding(8.dp)) {
+        }
+        val cardsGrid: @Composable (Modifier) -> Unit = { m ->
+            Column(m.padding(6.dp)) {
                 Text(
                     "${board.topicName(topicId)} · ${board.cardsOf(topicId).size} tessere · tocca per modificare",
-                    color = Muted, modifier = Modifier.padding(4.dp)
+                    color = Muted, modifier = Modifier.padding(4.dp), fontSize = 13.sp
                 )
-                LazyVerticalGrid(columns = GridCells.Adaptive(120.dp), modifier = Modifier.fillMaxSize()) {
+                LazyVerticalGrid(columns = GridCells.Adaptive(if (compact) 96.dp else 120.dp), modifier = Modifier.fillMaxSize()) {
                     item(key = "__new") {
                         Box(
                             Modifier.aspectRatio(1f).padding(3.dp).clip(RoundedCornerShape(14.dp)).background(Panel)
-                                .clickable {
-                                    editCard = Card(newId("c"), topicId, ""); editCardIsNew = true
-                                },
+                                .clickable { editCard = Card(newId("c"), topicId, ""); editCardIsNew = true },
                             contentAlignment = Alignment.Center
-                        ) { Text("+\nNuova\ntessera", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Accent) }
+                        ) { Text("+\nNuova\ntessera", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Accent) }
                     }
                     items(board.cardsOf(topicId), key = { it.id }) { c ->
                         Box {
@@ -131,6 +119,42 @@ fun EditorScreen(
                         }
                     }
                 }
+            }
+        }
+
+        if (compact) {
+            // Telefono: argomenti in una riga scorrevole sopra le tessere
+            LazyRow(Modifier.fillMaxWidth().background(Panel).padding(2.dp)) {
+                item(key = "__core") {
+                    TopicTile("⭐", null, "Parole base", topicId == CORE_TOPIC, false, small = true) { topicId = CORE_TOPIC }
+                }
+                items(board.topics, key = { it.id }) { t ->
+                    TopicTile(t.emoji, t.imagePath, t.name, t.id == topicId, false, small = true) { topicId = t.id }
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(onClick = newTopic) { Text("+ Argomento") }
+                topicActions()
+            }
+            cardsGrid(Modifier.weight(1f).fillMaxWidth())
+        } else {
+            Row(Modifier.fillMaxSize()) {
+                Column(Modifier.width(250.dp).fillMaxHeight().background(Panel).padding(6.dp)) {
+                    Button(onClick = newTopic, modifier = Modifier.fillMaxWidth()) { Text("+ Nuovo argomento") }
+                    LazyColumn(Modifier.weight(1f)) {
+                        item(key = "__core") {
+                            TopicTile("⭐", null, "Parole base", topicId == CORE_TOPIC, false, Modifier.fillMaxWidth()) { topicId = CORE_TOPIC }
+                        }
+                        items(board.topics, key = { it.id }) { t ->
+                            TopicTile(t.emoji, t.imagePath, t.name, t.id == topicId, false, Modifier.fillMaxWidth()) { topicId = t.id }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { topicActions() }
+                }
+                cardsGrid(Modifier.weight(1f).fillMaxHeight())
             }
         }
     }
@@ -171,7 +195,7 @@ fun EditorScreen(
                 )
             },
             confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Button(enabled = inTopic.isNotEmpty(), onClick = { askBatch = false; batchCards = inTopic }) { Text("Questo argomento") }
                     Button(enabled = all.isNotEmpty(), onClick = { askBatch = false; batchCards = all }) { Text("Tutte") }
                 }
@@ -216,7 +240,7 @@ private fun ImagePreview(imagePath: String?, emoji: String, bg: Color) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CardEditDialog(
     initial: Card,
@@ -239,11 +263,11 @@ fun CardEditDialog(
         title = { Text(if (isNew) "Nuova tessera" else "Modifica tessera") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     ImagePreview(d.imagePath, d.emoji, d.wordClass.color)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Button(onClick = { showArasaac = true }) { Text("🔎 Pittogramma ARASAAC") }
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(onClick = { requestImage(ImageSource.GALLERY) { d = d.copy(imagePath = it) } }) { Text("🖼 Galleria") }
                             OutlinedButton(onClick = { requestImage(ImageSource.CAMERA) { d = d.copy(imagePath = it) } }) { Text("📷 Foto") }
                         }
@@ -270,7 +294,7 @@ fun CardEditDialog(
                 ChoiceRow(topicOptions, d.topicId, { id -> if (id == CORE_TOPIC) "⭐ Parole base" else topics.firstOrNull { it.id == id }?.name ?: id }) {
                     d = d.copy(topicId = it)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     OutlinedButton(enabled = d.label.isNotBlank(), onClick = { onSave(d); openVoice(d) }) { Text("🎙 Registra voce") }
                     if (!isNew) {
                         OutlinedButton(onClick = { onMove(-1) }) { Text("◀ Prima") }
@@ -301,7 +325,7 @@ fun CardEditDialog(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TopicEditDialog(
     initial: Topic,
@@ -317,7 +341,7 @@ fun TopicEditDialog(
         title = { Text(if (isNew) "Nuovo argomento" else "Modifica argomento") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     ImagePreview(d.imagePath, d.emoji, Panel)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Button(onClick = { showArasaac = true }) { Text("🔎 ARASAAC") }
@@ -348,7 +372,7 @@ fun TopicEditDialog(
 }
 
 /** Ricerca pittogrammi ARASAAC (serve la connessione internet). */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ArasaacDialog(initialQuery: String, onPicked: (String) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -421,6 +445,7 @@ fun ArasaacDialog(initialQuery: String, onPicked: (String) -> Unit, onDismiss: (
 }
 
 /** Registrazione della voce di una tessera. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun VoiceDialog(card: Card, voices: VoiceStore, onDismiss: () -> Unit) {
     var recording by remember { mutableStateOf(false) }
@@ -435,7 +460,7 @@ fun VoiceDialog(card: Card, voices: VoiceStore, onDismiss: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 CardTile(card, true, false, Modifier.size(110.dp))
                 Text("Registra la parola o la frase (es. la voce di un familiare). Sostituisce la sintesi vocale per questa tessera.")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!recording) {
                         Button(onClick = { error = !voices.startRecording(card.id); recording = !error }) { Text("⏺ Registra") }
                     } else {

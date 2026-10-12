@@ -35,6 +35,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalConfiguration
+
+/** Schermo stretto (telefono in verticale): layout a una colonna, tessere più grandi. */
+@Composable
+fun isCompact(): Boolean = LocalConfiguration.current.screenWidthDp < 600
 
 val Ink = Color(0xFF1B1B1B)
 val Muted = Color(0xFF616161)
@@ -95,6 +100,7 @@ fun TopicTile(
     selected: Boolean,
     uppercase: Boolean,
     modifier: Modifier = Modifier,
+    small: Boolean = false,
     onClick: () -> Unit,
 ) {
     val img = rememberImage(imagePath)
@@ -105,14 +111,14 @@ fun TopicTile(
             .background(if (selected) Accent else Color.White)
             .border(1.dp, Color(0x33000000), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(8.dp),
+            .padding(if (small) 6.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (img != null) Image(img, null, contentScale = ContentScale.Fit, modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)))
-        else Text(emoji.ifBlank { "📁" }, fontSize = 30.sp)
+        if (img != null) Image(img, null, contentScale = ContentScale.Fit, modifier = Modifier.size(if (small) 28.dp else 40.dp).clip(RoundedCornerShape(6.dp)))
+        else Text(emoji.ifBlank { "📁" }, fontSize = if (small) 22.sp else 30.sp)
         Text(
             if (uppercase) name.uppercase() else name,
-            fontSize = 17.sp, fontWeight = FontWeight.Bold,
+            fontSize = if (small) 15.sp else 17.sp, fontWeight = FontWeight.Bold,
             color = if (selected) Color.White else Ink,
             maxLines = 2, modifier = Modifier.padding(start = 8.dp)
         )
@@ -121,6 +127,17 @@ fun TopicTile(
 
 @Composable
 fun TopBar(title: String, onBack: (() -> Unit)?, actions: @Composable RowScope.() -> Unit = {}) {
+    if (isCompact()) {
+        // Telefono: titolo sopra, pulsanti sotto (scorrevoli)
+        Column(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 6.dp, vertical = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (onBack != null) TextButton(onClick = onBack) { Text("←", fontSize = 22.sp) }
+                Text(title, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) { actions() }
+        }
+        return
+    }
     Row(
         Modifier.fillMaxWidth().background(Panel).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -159,12 +176,12 @@ fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
 @Composable
 fun BarRow(label: String, value: Int, max: Int, color: Color) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, modifier = Modifier.width(150.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, color = Ink)
+        Text(label, modifier = Modifier.width(if (isCompact()) 110.dp else 150.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, color = Ink)
         Box(Modifier.weight(1f).height(20.dp)) {
             val f = if (max <= 0) 0f else value.toFloat() / max
             Box(Modifier.fillMaxHeight().fillMaxWidth(f.coerceIn(0.01f, 1f)).clip(RoundedCornerShape(4.dp)).background(color))
         }
-        Text("$value", modifier = Modifier.width(48.dp).padding(start = 6.dp), fontWeight = FontWeight.Bold, color = Ink)
+        Text("$value", modifier = Modifier.width(44.dp).padding(start = 6.dp), fontWeight = FontWeight.Bold, color = Ink)
     }
 }
 

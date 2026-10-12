@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
@@ -52,10 +54,11 @@ fun TherapistMenu(
     onTogglePin: () -> Unit,
     onInfo: () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().background(Color.White).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    val compact = isCompact()
+    Column(Modifier.fillMaxSize().background(Color.White).verticalScroll(rememberScrollState()).padding(if (compact) 12.dp else 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Area terapista", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = onProfiles) { Text("👤 $profileName") }
+            Text("Area terapista", fontSize = if (compact) 22.sp else 28.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.weight(1f))
+            OutlinedButton(onClick = onProfiles) { Text("👤 $profileName", maxLines = 1) }
         }
         // Sessione
         Row(
@@ -74,21 +77,37 @@ fun TherapistMenu(
                     color = Muted, fontSize = 13.sp
                 )
             }
-            if (session != null) Button(onClick = onEndSession) { Text("■ Termina") }
-            else Button(onClick = onStartSession) { Text("▶ Avvia sessione") }
+            if (!compact) {
+                if (session != null) Button(onClick = onEndSession) { Text("■ Termina") }
+                else Button(onClick = onStartSession) { Text("▶ Avvia sessione") }
+            }
         }
-        Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            MenuTile("💬", "Comunicatore", Color(0xFF1565C0), Modifier.weight(1f), onCommunicator)
-            MenuTile("✏️", "Tessere e argomenti", Color(0xFF2E7D32), Modifier.weight(1f), onEditor)
-            MenuTile("📖", "Storie", Color(0xFFEF6C00), Modifier.weight(1f), onStories)
-            MenuTile("📊", "Statistiche", Color(0xFF6A1B9A), Modifier.weight(1f), onStats)
-            MenuTile("⚙️", "Impostazioni", Color(0xFF455A64), Modifier.weight(1f), onSettings)
+        if (compact) {
+            if (session != null) Button(onClick = onEndSession, modifier = Modifier.fillMaxWidth()) { Text("■ Termina sessione") }
+            else Button(onClick = onStartSession, modifier = Modifier.fillMaxWidth()) { Text("▶ Avvia sessione") }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = onBackup) { Text("💾 Backup / ripristino") }
-            OutlinedButton(onClick = onTogglePin) { Text(if (pinned) "🔓 Sblocca app" else "📌 Blocca app sullo schermo") }
-            OutlinedButton(onClick = onInfo) { Text("ℹ️ Informazioni e crediti") }
+        val tiles: List<@Composable (Modifier) -> Unit> = listOf(
+            { m -> MenuTile("💬", "Comunicatore", Color(0xFF1565C0), m, onCommunicator) },
+            { m -> MenuTile("✏️", "Tessere e argomenti", Color(0xFF2E7D32), m, onEditor) },
+            { m -> MenuTile("📖", "Storie", Color(0xFFEF6C00), m, onStories) },
+            { m -> MenuTile("📊", "Statistiche", Color(0xFF6A1B9A), m, onStats) },
+            { m -> MenuTile("⚙️", "Impostazioni", Color(0xFF455A64), m, onSettings) },
+        )
+        // Telefono: 2 per riga; tablet: tutte in una riga
+        tiles.chunked(if (compact) 2 else 5).forEach { row ->
+            Row(Modifier.fillMaxWidth().height(if (compact) 120.dp else 150.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEach { tile -> tile(Modifier.weight(1f)) }
+                if (row.size < (if (compact) 2 else 5)) repeat((if (compact) 2 else 5) - row.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
+        val extra = Modifier.then(if (compact) Modifier.fillMaxWidth() else Modifier)
+        val buttons: @Composable () -> Unit = {
+            OutlinedButton(onClick = onBackup, modifier = extra) { Text("💾 Backup / ripristino") }
+            OutlinedButton(onClick = onTogglePin, modifier = extra) { Text(if (pinned) "🔓 Sblocca app" else "📌 Blocca app sullo schermo") }
+            OutlinedButton(onClick = onInfo, modifier = extra) { Text("ℹ️ Informazioni e crediti") }
+        }
+        if (compact) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { buttons() }
+        else Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { buttons() }
     }
 }
 
@@ -99,8 +118,8 @@ private fun MenuTile(emoji: String, title: String, color: Color, modifier: Modif
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(emoji, fontSize = 44.sp)
-        Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(emoji, fontSize = 40.sp)
+        Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.Center)
     }
 }
 
@@ -111,7 +130,9 @@ fun SettingsScreen(store: SettingsStore, onTestVoice: () -> Unit, onBack: () -> 
         TopBar("Impostazioni", onBack) { OutlinedButton(onClick = onTestVoice) { Text("🔊 Prova voce") } }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionLabel("Tessere")
-            Text("Colonne della griglia: ${p.columns}", color = Ink)
+            Text("Colonne su telefono: ${p.phoneColumns}", color = Ink)
+            Slider(p.phoneColumns.toFloat(), { store.update(p.copy(phoneColumns = it.roundToInt())) }, valueRange = 2f..5f, steps = 2)
+            Text("Colonne su tablet: ${p.columns}", color = Ink)
             Slider(p.columns.toFloat(), { store.update(p.copy(columns = it.roundToInt())) }, valueRange = 2f..10f, steps = 7)
             SwitchRow("Mostra la parola sotto l'immagine", p.showLabels) { store.update(p.copy(showLabels = it)) }
             SwitchRow("Testo in MAIUSCOLO (stampato maiuscolo)", p.uppercase) { store.update(p.copy(uppercase = it)) }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -211,7 +212,7 @@ fun StoryLibraryScreen(store: StoryStore, onOpen: (Story) -> Unit, onBack: () ->
         if (store.stories.isEmpty()) {
             Text("Nessuna storia. Creale dall'Area terapista → Storie.", color = Muted, modifier = Modifier.padding(24.dp))
         }
-        LazyVerticalGrid(columns = GridCells.Adaptive(220.dp), modifier = Modifier.fillMaxSize().padding(12.dp)) {
+        LazyVerticalGrid(columns = GridCells.Adaptive(if (isCompact()) 150.dp else 220.dp), modifier = Modifier.fillMaxSize().padding(8.dp)) {
             items(store.stories, key = { it.id }) { s ->
                 val img = rememberImage(s.pages.firstOrNull { it.imagePath != null }?.imagePath)
                 Column(
@@ -220,9 +221,9 @@ fun StoryLibraryScreen(store: StoryStore, onOpen: (Story) -> Unit, onBack: () ->
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    if (img != null) Image(img, null, contentScale = ContentScale.Crop, modifier = Modifier.size(120.dp).clip(RoundedCornerShape(14.dp)))
-                    else Text(s.emoji.ifBlank { "📖" }, fontSize = 80.sp)
-                    Text(s.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center)
+                    if (img != null) Image(img, null, contentScale = ContentScale.Crop, modifier = Modifier.size(90.dp).clip(RoundedCornerShape(14.dp)))
+                    else Text(s.emoji.ifBlank { "📖" }, fontSize = 60.sp)
+                    Text(s.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center)
                     Text("${s.pages.size} pagine", color = Muted)
                 }
             }
@@ -249,6 +250,7 @@ fun StoryReaderScreen(
 ) {
     var page by remember { mutableIntStateOf(0) }
     var highlight by remember { mutableIntStateOf(-1) }
+    val compact = isCompact()
     DisposableEffect(Unit) { onDispose { stopSpeaking() } }
     if (story.pages.isEmpty()) {
         Column(Modifier.fillMaxSize().background(Color.White)) {
@@ -265,15 +267,15 @@ fun StoryReaderScreen(
             Modifier.fillMaxWidth().background(Color(0xFFFFE0B2)).padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ReaderButton("✖", Color.White) { onClose() }
+            ReaderButton("✖", Color.White, Modifier.size(64.dp, 56.dp)) { onClose() }
             Text(
-                "${story.emoji} ${story.title}", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Ink,
+                "${story.emoji} ${story.title}", fontSize = if (compact) 18.sp else 24.sp, maxLines = 2, fontWeight = FontWeight.Bold, color = Ink,
                 modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
             )
-            Text("${page + 1} / ${story.pages.size}", fontSize = 22.sp, color = Muted)
+            Text("${page + 1}/${story.pages.size}", fontSize = 18.sp, color = Muted)
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(12.dp)) {
-            val tokenSize = ((maxWidth.value - 40f) / 6f).coerceIn(90f, 150f).toInt()
+            val tokenSize = if (compact) ((maxWidth.value - 8f) / 3f).coerceIn(80f, 120f).toInt() else ((maxWidth.value - 40f) / 6f).coerceIn(90f, 150f).toInt()
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -283,7 +285,7 @@ fun StoryReaderScreen(
                 if (img != null) {
                     Image(
                         img, null, contentScale = ContentScale.Fit,
-                        modifier = Modifier.height(260.dp).clip(RoundedCornerShape(18.dp))
+                        modifier = Modifier.height(if (compact) 180.dp else 260.dp).clip(RoundedCornerShape(18.dp))
                     )
                 }
                 FlowRow(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
@@ -296,28 +298,29 @@ fun StoryReaderScreen(
                 }
                 Text(
                     if (p.uppercase) pg.text.uppercase() else pg.text,
-                    fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center
+                    fontSize = if (compact) 22.sp else 30.sp, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center
                 )
             }
         }
         Row(
             Modifier.fillMaxWidth().background(Color(0xFFFFE0B2)).padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
         ) {
-            ReaderButton("◀", Color.White, enabled = page > 0) { page-- }
-            ReaderButton("🔊", Color(0xFF81C784)) { say(null, pg.text) }
-            ReaderButton("👆", Color(0xFF90CAF9)) {
+            val bm = if (compact) Modifier.weight(1f).height(64.dp) else Modifier.size(110.dp, 80.dp)
+            ReaderButton("◀", Color.White, bm, enabled = page > 0) { page-- }
+            ReaderButton("🔊", Color(0xFF81C784), bm) { say(null, pg.text) }
+            ReaderButton("👆", Color(0xFF90CAF9), bm) {
                 speakSequence(pg.tokens.map { tokenWord(it, board) }) { i -> highlight = i }
             }
-            ReaderButton("▶", Color.White, enabled = page < story.pages.size - 1) { page++ }
+            ReaderButton("▶", Color.White, bm, enabled = page < story.pages.size - 1) { page++ }
         }
     }
 }
 
 @Composable
-private fun ReaderButton(symbol: String, color: Color, enabled: Boolean = true, onClick: () -> Unit) {
+private fun ReaderButton(symbol: String, color: Color, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
-        Modifier.size(width = 110.dp, height = 80.dp).clip(RoundedCornerShape(18.dp))
+        modifier.clip(RoundedCornerShape(18.dp))
             .background(if (enabled) color else Color(0xFFEEEEEE))
             .border(1.dp, Color(0x33000000), RoundedCornerShape(18.dp))
             .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
@@ -335,23 +338,35 @@ fun StoryEditorScreen(
     p: Prefs,
     requestImage: (ImageSource, (String) -> Unit) -> Unit,
     onPreview: (Story) -> Unit,
+    onExportPdf: (Story) -> Unit,
     onBack: () -> Unit,
 ) {
     var selectedId by remember { mutableStateOf(store.stories.firstOrNull()?.id) }
     var editPage by remember { mutableStateOf<Int?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
     val story = store.stories.firstOrNull { it.id == selectedId }
+    val compact = isCompact()
+    val newStory = {
+        val s = Story(newId("st"), "Nuova storia", "📖", listOf(StoryPage("", emptyList())))
+        store.upsert(s); selectedId = s.id
+    }
 
     Column(Modifier.fillMaxSize().background(Color.White)) {
         TopBar("Storie", onBack) {
+            if (compact) OutlinedButton(onClick = newStory) { Text("+ Nuova storia") }
             if (story != null) OutlinedButton(onClick = { onPreview(story) }) { Text("▶ Prova lettura") }
+            if (story != null) Button(onClick = { onExportPdf(story) }) { Text("📄 Scarica PDF") }
+        }
+        if (compact) {
+            LazyRow(Modifier.fillMaxWidth().background(Panel).padding(2.dp)) {
+                items(store.stories, key = { it.id }) { s ->
+                    TopicTile(s.emoji, null, s.title, s.id == selectedId, false, small = true) { selectedId = s.id }
+                }
+            }
         }
         Row(Modifier.fillMaxSize()) {
-            Column(Modifier.width(250.dp).fillMaxHeight().background(Panel).padding(6.dp)) {
-                Button(onClick = {
-                    val s = Story(newId("st"), "Nuova storia", "📖", listOf(StoryPage("", emptyList())))
-                    store.upsert(s); selectedId = s.id
-                }, modifier = Modifier.fillMaxWidth()) { Text("+ Nuova storia") }
+            if (!compact) Column(Modifier.width(250.dp).fillMaxHeight().background(Panel).padding(6.dp)) {
+                Button(onClick = newStory, modifier = Modifier.fillMaxWidth()) { Text("+ Nuova storia") }
                 LazyColumn(Modifier.fillMaxSize()) {
                     items(store.stories, key = { it.id }) { s ->
                         TopicTile(s.emoji, null, s.title, s.id == selectedId, false, Modifier.fillMaxWidth()) { selectedId = s.id }
@@ -367,10 +382,10 @@ fun StoryEditorScreen(
                     Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedTextField(
                             value = story.title, onValueChange = { store.upsert(story.copy(title = it)) }, singleLine = true,
-                            label = { Text("Titolo") }, modifier = Modifier.weight(1f)
+                            label = { Text("Titolo") }, modifier = Modifier.width(260.dp)
                         )
                         OutlinedTextField(
                             value = story.emoji, onValueChange = { store.upsert(story.copy(emoji = it.take(8))) }, singleLine = true,
@@ -383,8 +398,8 @@ fun StoryEditorScreen(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel).padding(10.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("Pagina ${i + 1}", fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.weight(1f))
+                            Text("Pagina ${i + 1}", fontWeight = FontWeight.Bold, color = Ink)
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 OutlinedButton(onClick = { editPage = i }) { Text("✏ Modifica") }
                                 OutlinedButton(onClick = { store.upsert(story.copy(pages = swap(story.pages, i, i - 1))) }) { Text("▲") }
                                 OutlinedButton(onClick = { store.upsert(story.copy(pages = swap(story.pages, i, i + 1))) }) { Text("▼") }
@@ -392,7 +407,7 @@ fun StoryEditorScreen(
                             }
                             Text(pg.text.ifBlank { "(pagina vuota: tocca Modifica)" }, color = if (pg.text.isBlank()) Muted else Ink, fontSize = 18.sp)
                             FlowRow {
-                                pg.tokens.forEach { t -> StoryToken(t, board, p, 70, false) }
+                                pg.tokens.forEach { t -> StoryToken(t, board, p, if (compact) 60 else 70, false) }
                             }
                         }
                     }
@@ -456,7 +471,7 @@ private fun PageEditDialog(
                     label = { Text("Testo della pagina (es. Oggi vado al parco con il papà.)") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Button(onClick = { d = d.copy(tokens = symbolize(d.text, board.cards)) }) { Text("✨ Simboli dal testo") }
                     OutlinedButton(onClick = { showPicker = true }) { Text("+ Tessera") }
                     if (d.tokens.isNotEmpty()) TextButton(onClick = { d = d.copy(tokens = emptyList()) }) { Text("Svuota") }
@@ -468,14 +483,14 @@ private fun PageEditDialog(
                     }
                 }
                 SectionLabel("Immagine della pagina (facoltativa)")
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val img = rememberImage(d.imagePath)
                     Box(Modifier.size(110.dp).clip(RoundedCornerShape(12.dp)).background(Panel), contentAlignment = Alignment.Center) {
                         if (img != null) Image(img, null, contentScale = ContentScale.Fit, modifier = Modifier.size(100.dp))
                         else Text("—", color = Muted)
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(onClick = { requestImage(ImageSource.GALLERY) { d = d.copy(imagePath = it) } }) { Text("🖼 Galleria") }
                             OutlinedButton(onClick = { requestImage(ImageSource.CAMERA) { d = d.copy(imagePath = it) } }) { Text("📷 Foto") }
                         }

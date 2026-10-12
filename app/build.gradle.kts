@@ -12,8 +12,8 @@ android {
         applicationId = "it.tesi.caa"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     // Firma fissa: gli aggiornamenti si installano sopra la versione precedente

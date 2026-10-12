@@ -57,6 +57,7 @@ class ProfileStore(private val context: Context) {
 /** Impostazioni del profilo. */
 data class Prefs(
     val columns: Int = 5,
+    val phoneColumns: Int = 3,
     val showLabels: Boolean = true,
     val uppercase: Boolean = false,
     val sentenceMode: Boolean = true,
@@ -78,6 +79,7 @@ class SettingsStore(dir: File) {
         val d = Prefs()
         Prefs(
             columns = o.optInt("columns", d.columns),
+            phoneColumns = o.optInt("phoneColumns", d.phoneColumns),
             showLabels = o.optBoolean("labels", d.showLabels),
             uppercase = o.optBoolean("upper", d.uppercase),
             sentenceMode = o.optBoolean("sentence", d.sentenceMode),
@@ -93,7 +95,7 @@ class SettingsStore(dir: File) {
     fun update(n: Prefs) {
         p = n
         val o = JSONObject()
-            .put("columns", n.columns).put("labels", n.showLabels).put("upper", n.uppercase)
+            .put("columns", n.columns).put("phoneColumns", n.phoneColumns).put("labels", n.showLabels).put("upper", n.uppercase)
             .put("sentence", n.sentenceMode).put("speakTap", n.speakOnTap).put("core", n.showCore)
             .put("rate", n.ttsRate.toDouble()).put("pitch", n.ttsPitch.toDouble())
             .put("lock", n.childLock).put("debounce", n.debounceMs)

@@ -82,64 +82,87 @@ fun CommunicatorScreen(
         log.log(Ev.SENTENCE, null, "", text, strip.size)
     }
 
-    Column(Modifier.fillMaxSize().background(Color.White)) {
-        // ---------- Barra frase + comandi ----------
+    val compact = isCompact()
+    val cols = if (compact) p.phoneColumns else p.columns
+
+    val stripView: @Composable (Modifier, Int) -> Unit = { m, tile ->
         Row(
-            Modifier.fillMaxWidth().height(if (p.sentenceMode) 116.dp else 64.dp).background(Panel).padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            m.clip(RoundedCornerShape(14.dp)).background(Color.White)
+                .border(1.dp, Color(0x33000000), RoundedCornerShape(14.dp))
+                .clickable { speakStrip() }
+                .horizontalScroll(rememberScrollState()).padding(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (p.sentenceMode) {
-                Row(
-                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(14.dp)).background(Color.White)
-                        .border(1.dp, Color(0x33000000), RoundedCornerShape(14.dp))
-                        .clickable { speakStrip() }
-                        .horizontalScroll(rememberScrollState()).padding(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (strip.isEmpty()) Text("  Tocca le tessere per comporre una frase", color = Muted, fontSize = 18.sp)
-                    strip.forEach { c ->
-                        CardTile(c, p.showLabels, p.uppercase, Modifier.size(96.dp))
+            if (strip.isEmpty()) Text("  Tocca le tessere per comporre una frase", color = Muted, fontSize = if (compact) 15.sp else 18.sp)
+            strip.forEach { c -> CardTile(c, p.showLabels, p.uppercase, Modifier.size(tile.dp)) }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(Color.White)) {
+        // ---------- Barra frase + comandi ----------
+        if (compact) {
+            Column(Modifier.fillMaxWidth().background(Panel).padding(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (p.sentenceMode) stripView(Modifier.fillMaxWidth().height(84.dp), 74)
+                Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (p.sentenceMode) {
+                        ActionButton("🔊", Color(0xFF66BB6A), Modifier.weight(1f).fillMaxHeight()) { speakStrip() }
+                        ActionButton("⌫", Color(0xFFFFB74D), Modifier.weight(1f).fillMaxHeight()) { if (strip.isNotEmpty()) strip.removeAt(strip.size - 1) }
+                        ActionButton("✖", Color(0xFFEF9A9A), Modifier.weight(1f).fillMaxHeight()) {
+                            if (strip.isNotEmpty()) { log.log(Ev.CLEAR, null, "", "", strip.size); strip.clear() }
+                        }
                     }
+                    ActionButton("📖", Color(0xFFFFE0B2), Modifier.weight(1f).fillMaxHeight()) { onOpenStories() }
+                    MenuButton(p.childLock, log.current != null, Modifier.weight(1f).fillMaxHeight(), onOpenMenu)
                 }
-                ActionButton("🔊", Color(0xFF66BB6A)) { speakStrip() }
-                ActionButton("⌫", Color(0xFFFFB74D)) { if (strip.isNotEmpty()) strip.removeAt(strip.size - 1) }
-                ActionButton("✖", Color(0xFFEF9A9A)) {
-                    if (strip.isNotEmpty()) { log.log(Ev.CLEAR, null, "", "", strip.size); strip.clear() }
-                }
-            } else {
-                Text("Tocca una tessera per parlare", color = Muted, fontSize = 18.sp, modifier = Modifier.weight(1f).padding(start = 8.dp))
             }
-            ActionButton("📖", Color(0xFFFFE0B2)) { onOpenStories() }
-            MenuButton(p.childLock, log.current != null, onOpenMenu)
+        } else {
+            Row(
+                Modifier.fillMaxWidth().height(if (p.sentenceMode) 116.dp else 72.dp).background(Panel).padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (p.sentenceMode) {
+                    stripView(Modifier.weight(1f).fillMaxHeight(), 96)
+                    ActionButton("🔊", Color(0xFF66BB6A), Modifier.size(84.dp, 96.dp)) { speakStrip() }
+                    ActionButton("⌫", Color(0xFFFFB74D), Modifier.size(84.dp, 96.dp)) { if (strip.isNotEmpty()) strip.removeAt(strip.size - 1) }
+                    ActionButton("✖", Color(0xFFEF9A9A), Modifier.size(84.dp, 96.dp)) {
+                        if (strip.isNotEmpty()) { log.log(Ev.CLEAR, null, "", "", strip.size); strip.clear() }
+                    }
+                } else {
+                    Text("Tocca una tessera per parlare", color = Muted, fontSize = 18.sp, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                }
+                ActionButton("📖", Color(0xFFFFE0B2), Modifier.size(84.dp, 96.dp)) { onOpenStories() }
+                MenuButton(p.childLock, log.current != null, Modifier.size(64.dp, 96.dp), onOpenMenu)
+            }
         }
 
         // ---------- Parole base ----------
         val core = board.cardsOf(CORE_TOPIC)
         if (p.showCore && core.isNotEmpty()) {
-            LazyRow(Modifier.fillMaxWidth().height(104.dp).padding(horizontal = 4.dp)) {
+            val sz = if (compact) 78 else 100
+            LazyRow(Modifier.fillMaxWidth().height((sz + 4).dp).padding(horizontal = 4.dp)) {
                 items(core, key = { it.id }) { c ->
-                    CardTile(c, p.showLabels, p.uppercase, Modifier.size(100.dp), onClick = { tap(c) })
+                    CardTile(c, p.showLabels, p.uppercase, Modifier.size(sz.dp), onClick = { tap(c) })
                 }
             }
         }
 
         // ---------- Argomenti + tessere ----------
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val landscape = maxWidth > maxHeight
+            val sideList = maxWidth > maxHeight && maxWidth >= 600.dp
             val cards = board.cardsOf(topicId)
             val grid: @Composable (Modifier) -> Unit = { m ->
                 if (cards.isEmpty()) {
                     Box(m, contentAlignment = Alignment.Center) { Text("Nessuna tessera in questo argomento", color = Muted) }
                 } else {
-                    LazyVerticalGrid(columns = GridCells.Fixed(p.columns), modifier = m.padding(4.dp)) {
+                    LazyVerticalGrid(columns = GridCells.Fixed(cols), modifier = m.padding(4.dp)) {
                         items(cards, key = { it.id }) { c ->
                             CardTile(c, p.showLabels, p.uppercase, Modifier.aspectRatio(1f), onClick = { tap(c) })
                         }
                     }
                 }
             }
-            if (landscape) {
+            if (sideList) {
                 Row(Modifier.fillMaxSize()) {
                     LazyColumn(Modifier.width(190.dp).fillMaxHeight().background(Panel).padding(4.dp)) {
                         items(board.topics, key = { it.id }) { t ->
@@ -153,12 +176,12 @@ fun CommunicatorScreen(
                 }
             } else {
                 Column(Modifier.fillMaxSize()) {
-                    LazyRow(Modifier.fillMaxWidth().background(Panel).padding(4.dp)) {
+                    LazyRow(Modifier.fillMaxWidth().background(Panel).padding(2.dp)) {
                         items(board.topics, key = { it.id }) { t ->
-                            TopicTile(t.emoji, t.imagePath, t.name, t.id == topicId, p.uppercase) { topicId = t.id }
+                            TopicTile(t.emoji, t.imagePath, t.name, t.id == topicId, p.uppercase, small = true) { topicId = t.id }
                         }
                         item(key = "__core") {
-                            TopicTile("⭐", null, "Parole base", topicId == CORE_TOPIC, p.uppercase) { topicId = CORE_TOPIC }
+                            TopicTile("⭐", null, "Parole base", topicId == CORE_TOPIC, p.uppercase, small = true) { topicId = CORE_TOPIC }
                         }
                     }
                     grid(Modifier.weight(1f).fillMaxWidth())
@@ -169,24 +192,24 @@ fun CommunicatorScreen(
 }
 
 @Composable
-private fun ActionButton(symbol: String, color: Color, onClick: () -> Unit) {
+private fun ActionButton(symbol: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
     Box(
-        Modifier.size(width = 84.dp, height = 96.dp).clip(RoundedCornerShape(14.dp)).background(color).clickable(onClick = onClick),
+        modifier.clip(RoundedCornerShape(14.dp)).background(color).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
-    ) { Text(symbol, fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Ink) }
+    ) { Text(symbol, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Ink) }
 }
 
 /** Accesso all'Area terapista: con la protezione bambino serve una pressione lunga. */
 @Composable
-private fun MenuButton(locked: Boolean, recording: Boolean, onOpen: () -> Unit) {
-    val m = Modifier.size(width = 64.dp, height = 96.dp).clip(RoundedCornerShape(14.dp)).background(Color.White)
+private fun MenuButton(locked: Boolean, recording: Boolean, modifier: Modifier, onOpen: () -> Unit) {
+    val m = modifier.clip(RoundedCornerShape(14.dp)).background(Color.White)
     Box(
         if (locked) m.pointerInput(Unit) { detectTapGestures(onLongPress = { onOpen() }) } else m.clickable(onClick = onOpen),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("⚙", fontSize = 30.sp, color = if (locked) Color(0x66000000) else Ink)
-            if (recording) Text("● REC", fontSize = 11.sp, color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold)
+            Text("⚙", fontSize = 28.sp, color = if (locked) Color(0x66000000) else Ink)
+            if (recording) Text("● REC", fontSize = 10.sp, color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold)
         }
     }
 }

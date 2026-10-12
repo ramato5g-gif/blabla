@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -75,6 +77,7 @@ fun StatsScreen(
     }
     val st = computeStats(filtered)
     val safeName = profileName.replace(Regex("[^A-Za-z0-9]"), "_")
+    val compact = isCompact()
 
     Column(Modifier.fillMaxSize().background(Color.White)) {
         TopBar("Statistiche · $profileName", onBack) {
@@ -86,20 +89,21 @@ fun StatsScreen(
             val options = listOf(Period.All, Period.Today, Period.Week, Period.Month) + log.sessions.reversed().map { Period.Of(it) }
             ChoiceRow(options, period, { it.title }) { period = it }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatBox("Tessere toccate", "${st.cardTaps}", Modifier.weight(1f))
-                StatBox("Tessere diverse", "${st.distinctCards}", Modifier.weight(1f))
-                StatBox("Frasi pronunciate", "${st.sentences}", Modifier.weight(1f))
-                StatBox("Lunghezza media frase", String.format(Locale.ITALY, "%.1f", st.mlu), Modifier.weight(1f))
-                StatBox("Frase più lunga", "${st.maxLen}", Modifier.weight(1f))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                val w = Modifier.width(if (compact) 140.dp else 180.dp)
+                StatBox("Tessere toccate", "${st.cardTaps}", w)
+                StatBox("Tessere diverse", "${st.distinctCards}", w)
+                StatBox("Frasi pronunciate", "${st.sentences}", w)
+                StatBox("Lunghezza media frase", String.format(Locale.ITALY, "%.1f", st.mlu), w)
+                StatBox("Frase più lunga", "${st.maxLen}", w)
             }
             Text(
                 "Lunghezza media frase = numero medio di tessere per frase pronunciata (indice di complessità, analogo all'LME in tessere).",
                 fontSize = 12.sp, color = Muted
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(Modifier.weight(1f)) {
+            val charts: @Composable (Modifier, Modifier) -> Unit = { m1, m2 ->
+                Column(m1) {
                     SectionLabel("Categorie grammaticali")
                     val maxC = st.byClass.maxOfOrNull { it.second } ?: 0
                     st.byClass.forEach { (cls, n) ->
@@ -110,11 +114,16 @@ fun StatsScreen(
                     val maxT = st.byTopic.maxOfOrNull { it.second } ?: 0
                     st.byTopic.forEach { (t, n) -> BarRow(t.ifBlank { "—" }, n, maxT, Color(0xFF90CAF9)) }
                 }
-                Column(Modifier.weight(1f)) {
+                Column(m2) {
                     SectionLabel("Tessere più usate")
                     val maxK = st.topCards.maxOfOrNull { it.second } ?: 0
                     st.topCards.forEach { (l, n) -> BarRow(l, n, maxK, Color(0xFFA5D6A7)) }
                 }
+            }
+            if (compact) {
+                charts(Modifier.fillMaxWidth(), Modifier.fillMaxWidth())
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) { charts(Modifier.weight(1f), Modifier.weight(1f)) }
             }
 
             SectionLabel("Ultime frasi")
@@ -124,12 +133,11 @@ fun StatsScreen(
             SectionLabel("Sessioni (${log.sessions.size})")
             log.sessions.reversed().forEach { s ->
                 val ss = computeStats(all.filter { it.session == s.id })
-                Row(
+                Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Panel).padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Column(Modifier.weight(1f)) {
+                    Column {
                         Text("${s.name}  ·  ${fmtShort(s.start)}" + (if (s.end == null) "  ● in corso" else ""), fontWeight = FontWeight.Bold, color = Ink)
                         Text(
                             "Tessere ${ss.cardTaps} · diverse ${ss.distinctCards} · frasi ${ss.sentences} · lungh. media ${String.format(Locale.ITALY, "%.1f", ss.mlu)}",
@@ -137,8 +145,10 @@ fun StatsScreen(
                         )
                         if (s.note.isNotBlank()) Text("Note: ${s.note}", color = Muted, fontSize = 13.sp)
                     }
-                    OutlinedButton(onClick = { editNote = s; noteText = s.note }) { Text("📝 Note") }
-                    OutlinedButton(onClick = { log.deleteSession(s.id) }) { Text("🗑") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { editNote = s; noteText = s.note }) { Text("📝 Note") }
+                        OutlinedButton(onClick = { log.deleteSession(s.id) }) { Text("🗑") }
+                    }
                 }
             }
             TextButton(onClick = { confirmClear = true }) { Text("Cancella tutti i dati registrati di questo profilo", color = Color(0xFFC62828)) }

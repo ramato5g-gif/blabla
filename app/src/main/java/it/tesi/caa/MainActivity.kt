@@ -2,6 +2,7 @@ package it.tesi.caa
 
 import android.Manifest
 import android.app.ActivityManager
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -9,7 +10,10 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.view.WindowManager
@@ -179,6 +183,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     Screen.STORY_EDIT -> StoryEditorScreen(
                         store = stories, board = board, p = settings.p, requestImage = requestImage,
                         onPreview = { st -> reading = st; readingFrom = Screen.STORY_EDIT; screen = Screen.STORY_READ },
+                        onExportPdf = { st ->
+                            toast("Creo il PDF…")
+                            runCatching { StoryPdf.create(this@MainActivity, st, board, settings.p.uppercase) }
+                                .onSuccess { f ->
+                                    if (saveToDownloads(f, "application/pdf")) toast("PDF salvato nella cartella Download: ${f.name}")
+                                    shareFile(f, "application/pdf", "Storia in PDF")
+                                }
+                                .onFailure { toast("PDF non riuscito: ${it.message}") }
+                        },
                         onBack = { screen = Screen.MENU }
                     )
 
@@ -348,6 +361,19 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             toast("Esportazione non riuscita: ${e.message}")
         }
     }
+
+    /** Copia il file nella cartella Download del telefono (Android 10+). */
+    private fun saveToDownloads(f: File, mime: String): Boolean = runCatching {
+        if (Build.VERSION.SDK_INT < 29) return false
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, f.name)
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+        }
+        val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return false
+        contentResolver.openOutputStream(uri)?.use { out -> f.inputStream().use { it.copyTo(out) } }
+        true
+    }.getOrDefault(false)
 
     private fun shareFile(file: File, mime: String, title: String) {
         try {
